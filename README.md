@@ -79,6 +79,7 @@ python pptv.py
 git clone https://github.com/SivanLaai/videoParser.git
 pip install -r requirements.txt
 cd iqiyi
+# 配置cookies，直接在cookies.ini中配置相关值 
 # 下载ffmpeg执行文件到iqiyi目录或者添加到系统环境变量
 python iqiyi.py
 # 根据提示会下载视频文件在同级目录下的Downloads
