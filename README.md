@@ -1,14 +1,15 @@
  # 视频下载工具
  ## dependecny
-  - Python3.10
-  - nodejs
-  - aria2c
-  - ffmpeg
+  - [Python 3.10](https://www.python.org/downloads/)
+  - [nodejs](http://nodejs.cn/download/)
+  - [aria2 1.36.0](https://github.com/aria2/aria2/releases/tag/release-1.36.0)
+  - [FFmpeg](https://github.com/BtbN/FFmpeg-Builds/releases)
  ## PPTV
 - 使用方法
 ```bash
 git clone https://github.com/SivanLaai/videoParser.git
 cd pptv
+# 下载aria2c执行文件到pptv目录或者添加到系统环境变量
 python pptv.py
 # 根据提示会下载视频文件在同级目录下的Downloads
 ```
@@ -74,6 +75,7 @@ python pptv.py
 ```bash
 git clone https://github.com/SivanLaai/videoParser.git
 cd iqiyi
+# 下载ffmpeg执行文件到iqiyi目录或者添加到系统环境变量
 python iqiyi.py
 # 根据提示会下载视频文件在同级目录下的Downloads
 ```
