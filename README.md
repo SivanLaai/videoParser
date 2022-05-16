@@ -4,10 +4,13 @@
   - [nodejs](http://nodejs.cn/download/)
   - [aria2 1.36.0](https://github.com/aria2/aria2/releases/tag/release-1.36.0)
   - [FFmpeg](https://github.com/BtbN/FFmpeg-Builds/releases)
+ ## release版本
+ - 不想安装环境可以直接下载[release版本](https://github.com/SivanLaai/videoParser/releases/tag/1.1)，集成了所有的可执行文件
  ## PPTV
 - 使用方法
 ```bash
 git clone https://github.com/SivanLaai/videoParser.git
+pip install -r requirements.txt
 cd pptv
 # 下载aria2c执行文件到pptv目录或者添加到系统环境变量
 python pptv.py
@@ -74,6 +77,7 @@ python pptv.py
 - 使用方法
 ```bash
 git clone https://github.com/SivanLaai/videoParser.git
+pip install -r requirements.txt
 cd iqiyi
 # 下载ffmpeg执行文件到iqiyi目录或者添加到系统环境变量
 python iqiyi.py
