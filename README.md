@@ -1,4 +1,9 @@
  # 视频下载工具
+ ## dependecny
+  - Python3.10
+  - nodejs
+  - aria2c
+  - ffmpeg
  ## PPTV
 - 使用方法
 ```bash
