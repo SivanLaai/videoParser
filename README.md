@@ -1,7 +1,7 @@
  # 视频下载工具
  ## dependecny
   - [Python 3.10](https://www.python.org/downloads/)
-  - [nodejs](http://nodejs.cn/download/)
+  - [nodejs](http://nodejs.cn/download/)(**这个必须安装，因为需要解析js，所以必须要有node环境**)
   - [aria2 1.36.0](https://github.com/aria2/aria2/releases/tag/release-1.36.0)
   - [FFmpeg](https://github.com/BtbN/FFmpeg-Builds/releases)
  ## release版本
