@@ -13,6 +13,7 @@ from lxml import etree
 import json
 import os
 import configparser
+import datetime
 
 config = configparser.ConfigParser()
 config.sections()
@@ -111,7 +112,7 @@ class IQIYI:
         vid = re.findall('"vid":"(.+?)"', response)[0]
         for node in html.xpath('//title'):
             curr = dict()
-            curr['title'] = node.text.split('-')[0]
+            curr['title'] = "-".join(node.text.split('-')[:-2])
             curr['aid'] = aid
             curr['tvid'] = tvid
             curr['vid'] = vid
@@ -133,95 +134,128 @@ class IQIYI:
 
         for node in html.xpath('//title'):
             videoType = node.text.split('-')[1]
-            if "电影" in videoType:
-                self.parseCurrUrlVideo(FilmResults, response)
-            else:
+            if "电视剧" in videoType:
                 FilmResults = self.getSeriesVideoTitle(aid)
+            else:
+                self.parseCurrUrlVideo(FilmResults, response)
             break
         return FilmResults
 
     def downloadVideo(self, title, m3u8url, exportConfirm=2):
-        #m3u8download(m3u8url=m3u8url,title=title)
+        m3u8download(m3u8url=m3u8url,title=title)
         if exportConfirm == 2:
             os.remove(m3u8url)
 
+    def parseFormatVideos(self, download_list, video, type="H264", tvid="0000", videoName='爱情神话'):
+        bid = video["bid"]
+        vid = video["vid"]
+        tm = int(time.time() * 1000)
 
-    def getFilmDownloadList(self, tvid='32754820', vid='32754820', videoName='爱情神话'):
-        #print (apiUrl)
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36 Edg/89.0.774.75',
+            'cookie': self.Cookie
+        }
+        if type == "H264":
+            url_with_dash_but_vf2 = f"/dash?tvid={tvid}&bid={bid}&vid={vid}&src=01010031010000000000&vt=0&rs=1&uid={self.Cookie_P00003}&ori=pcw&ps=0&k_uid={self.Cookie_QC005}&pt=0&d=0&s=&lid=&cf=&ct=&authKey=2170bbc6b3031a02f0eea970b62a4c6e&k_tag=1&ost=0&ppt=0&dfp={self.Cookie_dfp}&locale=zh_cn&prio=%7B%22ff%22%3A%22f4v%22%2C%22code%22%3A2%7D&pck=8cosibWGKuhJnxM7iy7G0ZaXvxQtuFMYk2HJMpjx2tXOm3GndOoRCdsOBlpm1Ygljq5A7e&k_err_retries=0&up=&spt=&qd_v=2&tm={tm}&qdy=a&qds=0&k_ft1=706436220846084&k_ft4=1161084347621396&k_ft5=262145&bop=%7B%22version%22%3A%2210.0%22%2C%22dfp%22%3A%22a0e63206a6a2144c30a1a41d110988ed489ead861f70c0acd9a692dd26fe8e6f69%22%7D&ut=1"
+        else:
+            url_with_dash_but_vf2 = f'/jp/dash?tvid={tvid}&bid={bid}&vid={vid}&src=03020031010000000000&vt=0&rs=1&uid={self.Cookie_P00003}&ori=pcw&ps=0&k_uid={self.Cookie_QC005}&pt=0&d=0&s=&lid=&cf=&ct=&k_tag=1&ost=0&ppt=0&dfp={self.Cookie_dfp}&locale=zh_cn&k_err_retries=0&qd_v=2&tm={tm}&qdy=a&qds=0&k_ft2=8191&callback=hecoter&ut=1'
+        vf = self.get_vf(url_with_dash_but_vf2)
+        videoCacheUrl = 'https://cache.video.iqiyi.com' + vf
+        response = requests.get(url=videoCacheUrl, headers=headers).text
+        if type == "H264":
+            data = json.loads(response)["data"]["program"]["video"]
+        else:
+            s = response.find("({")
+            e = response.rfind("}\n")
+            data = json.loads(response[s+1:e+2])["data"]["program"]["video"]
+        videoInfo = None
+        for d in data:
+            if d["_selected"] and bid == d["bid"]:
+                videoInfo = d
+                break
+
+        curr = dict()
+        if videoInfo is None:
+            return download_list
+        m3u8 = videoInfo["m3u8"]
+        #m3u8 = re.findall('"m3u8":"(.+?)"', response)[0].replace('/', '').replace('\\', '/')
+        m3u8s = m3u8.split('/n')
+        m3u8 = '\n'.join(m3u8s)
+
+        vsize = videoInfo["vsize"]
+        vsize = int(int(vsize) / 1024.0 / 1024)
+        vssize = str(vsize) + 'MB'
+        scrsz = videoInfo["scrsz"]
+
+        #curr['m3u8'] = m3u8
+        curr['fileSize'] = vssize
+        curr['resolution'] = scrsz
+        curr['format'] = "H264"
+        if videoInfo['ff'] == "265ts":
+            curr['format'] = "H265"
+        curr['name'] = videoName
+        curr['definition'] = bidMap[str(bid)[0]]
+        curr['bid'] = str(bid)
+        curr['duration'] = str(datetime.timedelta(seconds=videoInfo["duration"]))
+        fileName = f"{videoName}_{bidMap[str(bid)[0]]}_{curr['format']}_bid_{bid}"
+        if not os.path.exists("./Downloads"):
+            os.mkdir("./Downloads")
+        m3u8url = f'./Downloads/{fileName}.m3u8'
+        curr['fileName'] = fileName
+        curr['m3u8url'] = m3u8url
+        with open(m3u8url, 'w', encoding='utf-8') as f:
+            f.write(m3u8)
+        #print(curr)
+        download_list.append(curr)
+        return download_list
+
+    def getVideoList(self, vid, tvid, definition):
         headers = {
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36 Edg/89.0.774.75',
             'cookie': self.Cookie
         }
         tm = int(time.time() * 1000)
         bid = 800
-        url_with_dash_but_vf2 = f'/jp/dash?tvid={tvid}&bid={bid}&vid={vid}&src=03020031010000000000&vt=0&rs=1&uid={self.Cookie_P00003}&ori=pcw&ps=0&k_uid={self.Cookie_QC005}&pt=0&d=0&s=&lid=&cf=&ct=&k_tag=1&ost=0&ppt=0&dfp={self.Cookie_dfp}&locale=zh_cn&k_err_retries=0&qd_v=2&tm={tm}&qdy=a&qds=0&k_ft2=8191&callback=hecoter&ut=1'
-        vf = self.get_vf(url_with_dash_but_vf2)
-
-        videoCacheUrl = 'https://cache.video.iqiyi.com' + vf
-        response = requests.get(url=videoCacheUrl, headers=headers).text
-        s = response.find("({")
-        e = response.rfind("}\n")
-        data = json.loads(response[s+1:e+2])["data"]["program"]["video"]
         videoList = list()
-        for d in data:
-            curr = dict()
-            curr["bid"] = d["bid"]
-            curr["vid"] = d["vid"]
-            if d["ff"] == "f4v":
-                curr["format"] = "H264"
-            else:
-                curr["format"] = "H265"
-            videoList.append(curr)
-        #print(videoList)
-        download_list = list()
-        for video in videoList:
-            bid = video["bid"]
-            vid = video["vid"]
-            format = video["format"]
-            tm = int(time.time() * 1000)
-            url_with_dash_but_vf2 = f'/jp/dash?tvid={tvid}&bid={bid}&vid={vid}&src=03020031010000000000&vt=0&rs=1&uid={self.Cookie_P00003}&ori=pcw&ps=0&k_uid={self.Cookie_QC005}&pt=0&d=0&s=&lid=&cf=&ct=&k_tag=1&ost=0&ppt=0&dfp={self.Cookie_dfp}&locale=zh_cn&k_err_retries=0&qd_v=2&tm={tm}&qdy=a&qds=0&k_ft2=8191&callback=hecoter&ut=1'
-            vf = self.get_vf(url_with_dash_but_vf2)
-
+        url_with_dash_but_vf2 = f'/jp/dash?tvid={tvid}&bid={bid}&vid={vid}&src=03020031010000000000&vt=0&rs=1&uid={self.Cookie_P00003}&ori=pcw&ps=0&k_uid={self.Cookie_QC005}&pt=0&d=0&s=&lid=&cf=&ct=&k_tag=1&ost=0&ppt=0&dfp={self.Cookie_dfp}&locale=zh_cn&k_err_retries=0&qd_v=2&tm={tm}&qdy=a&qds=0&k_ft2=8191&callback=hecoter&ut=1'
+        url_with_dash_but_vf2_h265 = \
+            f"/dash?tvid={tvid}&bid={bid}&vid={vid}&src=01010031010000000000&vt=0&rs=1&uid={self.Cookie_P00003}&ori=pcw&ps=0&k_uid={self.Cookie_QC005}&pt=0&d=0&s=&lid=&cf=&ct=&authKey=2170bbc6b3031a02f0eea970b62a4c6e&k_tag=1&ost=0&ppt=0&dfp={self.Cookie_dfp}&locale=zh_cn&prio=%7B%22ff%22%3A%22f4v%22%2C%22code%22%3A2%7D&pck=8cosibWGKuhJnxM7iy7G0ZaXvxQtuFMYk2HJMpjx2tXOm3GndOoRCdsOBlpm1Ygljq5A7e&k_err_retries=0&up=&spt=&qd_v=2&tm={tm}&qdy=a&qds=0&k_ft1=706436220846084&k_ft4=1161084347621396&k_ft5=262145&bop=%7B%22version%22%3A%2210.0%22%2C%22dfp%22%3A%22a0e63206a6a2144c30a1a41d110988ed489ead861f70c0acd9a692dd26fe8e6f69%22%7D&ut=1"
+        currBidSet = set()
+        for url in [url_with_dash_but_vf2, url_with_dash_but_vf2_h265]:
+            vf = self.get_vf(url)
             videoCacheUrl = 'https://cache.video.iqiyi.com' + vf
             response = requests.get(url=videoCacheUrl, headers=headers).text
             s = response.find("({")
             e = response.rfind("}\n")
             data = json.loads(response[s+1:e+2])["data"]["program"]["video"]
-            videoInfo = None
             for d in data:
-                if d["_selected"] and bid == d["bid"]:
-                    videoInfo = d
-                    break
-            if videoInfo is None:
-                continue
-            m3u8 = videoInfo["m3u8"]
-            #m3u8 = re.findall('"m3u8":"(.+?)"', response)[0].replace('/', '').replace('\\', '/')
-            m3u8s = m3u8.split('/n')
-            m3u8 = '\n'.join(m3u8s)
+                if definition != "all" and definitionsMap[definition] != str(d["bid"])[0]:
+                    continue
+                if d["bid"] not in currBidSet:
+                    currBidSet.add(d["bid"])
+                else:
+                    continue
+                curr = dict()
+                curr["bid"] = d["bid"]
+                curr["vid"] = d["vid"]
+                videoList.append(curr)
+        return videoList
 
-            vsize = videoInfo["vsize"]
-            vsize = int(int(vsize) / 1024.0 / 1024)
-            vssize = str(vsize) + 'MB'
-            scrsz = videoInfo["scrsz"]
-            fileName = f"{videoName}_{bidMap[str(bid)[0]]}_format_{format}"
-            if not os.path.exists("./Downloads"):
-                os.mkdir("./Downloads")
-            m3u8url = f'./Downloads/{fileName}.m3u8'
+    def getFilmDownloadList(self, tvid='32754820', vid='32754820', videoName='爱情神话', definition="all", typeConfirm="1"):
+        #print (apiUrl)
+        videoList = self.getVideoList(vid, tvid, definition)
 
-            with open(m3u8url, 'w', encoding='utf-8') as f:
-                f.write(m3u8)
 
-            curr = dict()
-            curr['fileName'] = fileName
-            curr['m3u8url'] = m3u8url
-            #curr['m3u8'] = m3u8
-            curr['fileSize'] = vssize
-            curr['resolution'] = scrsz
-            curr['format'] = format
-            curr['name'] = videoName
-            curr['definition'] = bidMap[str(bid)[0]]
-            curr['bid'] = str(bid)
-            download_list.append(curr)
+        download_list = list()
+        for video in videoList:
+            if definition == "all":
+                download_list = self.parseFormatVideos(download_list, video, tvid=tvid, videoName=videoName)
+                download_list = self.parseFormatVideos(download_list, video, "H265", tvid=tvid, videoName=videoName)
+            elif typeConfirm == "2":
+                download_list = self.parseFormatVideos(download_list, video, "H265", tvid=tvid, videoName=videoName)
+            else:
+                download_list = self.parseFormatVideos(download_list, video, tvid=tvid, videoName=videoName)
+        download_list = sorted(download_list, key=lambda x:x['bid'], reverse=True)
         return download_list
 
     def startSingleDownload(self, fileResults):
@@ -232,16 +266,16 @@ class IQIYI:
             videoIndex = int(input("请输入要下载的视频序号："))
         download_list = self.getFilmDownloadList(fileResults[videoIndex]['tvid'], fileResults[videoIndex]['vid'], fileResults[videoIndex]['title'])
 
-        downloadTable = PrettyTable(["序号", "片名", "清晰度", "视频格式", "分辨率", "大小"])
-        exportTable = PrettyTable(["序号", "片名", "分辨率", "清晰度", "视频格式", "m3u8文件"])
+        downloadTable = PrettyTable(["序号", "片名", "清晰度", "bid", "视频格式", "分辨率", "大小", "时长"])
+        exportTable = PrettyTable(["序号", "片名", "分辨率", "清晰度", "bid", "视频格式", "m3u8文件"])
         #print(download_list)
         exportConfirm = input("请选择是否导出下载链接(1-表示导出，2-表示不导出，默认不导出):")
         if exportConfirm == "":
             exportConfirm = 2
 
         for i in range(len(download_list)):
-            downloadTable.add_row([i, download_list[i]['name'], download_list[i]['definition'], download_list[i]['format'], download_list[i]['resolution'], download_list[i]['fileSize']])
-            exportTable.add_row([i, download_list[i]['name'], download_list[i]['resolution'], download_list[i]['definition'], \
+            downloadTable.add_row([i, download_list[i]['name'], download_list[i]['definition'], download_list[i]['bid'], download_list[i]['format'], download_list[i]['resolution'], download_list[i]['fileSize'], download_list[i]['duration']])
+            exportTable.add_row([i, download_list[i]['name'], download_list[i]['resolution'], download_list[i]['definition'], download_list[i]['bid'], \
                 download_list[i]['format'], download_list[i]['m3u8url']])
         print(downloadTable)
         if int(exportConfirm) == 1:
@@ -254,19 +288,11 @@ class IQIYI:
         self.downloadVideo(fileName, m3u8url, exportConfirm)
         if int(exportConfirm) == 2:
             for i in range(len(download_list)):
-                os.remove(download_list[i]["m3u8url"])
+                try:
+                    os.remove(download_list[i]["m3u8url"])
+                except Exception as e:
+                    pass
         print()
-
-    def selectDefinition(self, definition, download_list):
-        bidStart = definitionsMap[definition]
-        for i in range(len(download_list)):
-            if bidStart == download_list[i]["bid"][0]:
-                return i
-        for bidStart in bidMap:
-            for i in range(len(download_list)):
-                if bidStart == download_list[i]["bid"][0]:
-                    return i
-        return 0
 
     def startMultSelectedDownload(self, fileResults, downloadAllFlag=False, exportFlag=False):
         videoIndexs = list()
@@ -294,7 +320,7 @@ class IQIYI:
         else:
             videoIndexs = range(len(fileResults))
         download_list = list()
-        downloadTable = PrettyTable(["序号", "片名", "清晰度", "视频格式", "分辨率", "大小"])
+        downloadTable = PrettyTable(["序号", "片名", "清晰度", "bid", "视频编码", "分辨率", "大小", "时长"])
         definitions = ['低清', '流畅', '高清', '超清', '蓝光', '4K']
         if not exportFlag:
             resIndex = int(input("""0 - 低清，1 - 流畅， 2 - 高清，3 - 超清，4 - 蓝光，5 - 4K
@@ -305,13 +331,20 @@ class IQIYI:
             resIndex = int(input("""0 - 低清，1 - 流畅， 2 - 高清，3 - 超清，4 - 蓝光，5 - 4K
 如果选择的分辨率没有，默认导出最高清的资源
 请选择要导出的视频清晰度:"""))
+        if definitions[resIndex] == "4k" or definitions[resIndex] == "4K":
+            typeConfirm = "2"
+        else:
+            typeConfirm = input("请选择视频编码(1-表示H264，2-表示H265，默认H264):")
+        if typeConfirm == "":
+            typeConfirm = "1"
         i = 0
-        exportTable = PrettyTable(["序号", "片名", "分辨率", "清晰度", "视频格式", "m3u8文件"])
+        exportTable = PrettyTable(["序号", "片名", "分辨率", "清晰度", "bid", "视频格式", "m3u8文件"])
         for videoIndex in videoIndexs:
-            currDownlist = self.getFilmDownloadList(fileResults[videoIndex]['tvid'], fileResults[videoIndex]['vid'], fileResults[videoIndex]['title'])
-            currIndex = self.selectDefinition(definitions[resIndex], currDownlist)
-            downloadTable.add_row([i, currDownlist[currIndex]['name'], currDownlist[currIndex]['definition'], currDownlist[currIndex]['format'], currDownlist[currIndex]['resolution'], currDownlist[currIndex]['fileSize']])
-            exportTable.add_row([i, currDownlist[currIndex]['name'], currDownlist[currIndex]['resolution'], currDownlist[currIndex]['definition'], \
+            currDownlist = self.getFilmDownloadList(fileResults[videoIndex]['tvid'], fileResults[videoIndex]['vid'], \
+                    fileResults[videoIndex]['title'], definitions[resIndex], typeConfirm)
+            currIndex = 0
+            downloadTable.add_row([i, currDownlist[currIndex]['name'], currDownlist[currIndex]['definition'], currDownlist[currIndex]['bid'], currDownlist[currIndex]['format'], currDownlist[currIndex]['resolution'], currDownlist[currIndex]['fileSize'], currDownlist[currIndex]['duration']])
+            exportTable.add_row([i, currDownlist[currIndex]['name'], currDownlist[currIndex]['resolution'], currDownlist[currIndex]['definition'], currDownlist[currIndex]['bid'], \
                 currDownlist[currIndex]['format'], currDownlist[currIndex]['m3u8url']])
             i += 1
             download_list.append(currDownlist[currIndex])
@@ -374,4 +407,5 @@ Yes(Y).退出    No(N).不退出
 
 if "__main__" == __name__:
     iqiyi = IQIYI().startDownload()
+
 
